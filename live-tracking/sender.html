@@ -68,6 +68,9 @@ diesem Gerät gespeichert und wird nie auf die Website hochgeladen.</div>
 
 <h2>GPS</h2>
 <button id="go" type="button">Senden starten</button>
+<button id="reset" type="button" class="secondary">Neues Rennen — Zähler auf 0</button>
+<div class="note">Der Kilometerstand wird laufend gespeichert und übersteht ein Neuladen oder
+einen Absturz. Vor einem neuen Lauf hier zurücksetzen, sonst zählt er den alten Stand weiter.</div>
 <div class="state">
   <div><span class="dot" id="dot"></span><b id="status">Gestoppt</b></div>
   <div>Gesendet: <b id="count">0</b> Punkte</div>
@@ -102,7 +105,15 @@ und die Bildschirmsperre auf „nie" stellen.</div>
       hrVal = document.getElementById('hrVal');
 
   var watchId = null, timer = null, laeuft = false, gesendet = 0, letzte = null, wakeLock = null;
-  var meter = 0, letzteLatLon = null, startZeit = null, fileSha = null, aktuellerPuls = null;
+  var meter = 0, letzteLatLon = null, letzteZeit = null, startZeit = null;
+  var fileSha = null, aktuellerPuls = null, pulsZeit = 0;
+  var btDevice = null, btChar = null, reconnectTimer = null;
+
+  // GPS-Filter: unpraezise Fixes verwerfen, Rauschen im Stehen ignorieren,
+  // und Spruenge nur verwerfen, wenn sie fuer die verstrichene Zeit unmoeglich sind.
+  var MAX_UNGENAU = 25;    // Meter — schlechtere Fixes wegwerfen
+  var MIN_SCHRITT = 8;     // Meter — darunter ist es GPS-Rauschen
+  var MAX_TEMPO   = 6;     // m/s — schneller als das laeuft niemand (= 2:47 min/km)
 
   // Eingaben merken
   try{
@@ -111,9 +122,46 @@ und die Bildschirmsperre auf „nie" stellen.</div>
     tokenEl.value = localStorage.getItem('k120_token') || '';
   }catch(e){}
 
+  // Renn-Zustand wiederherstellen: ueberlebt Neuladen, Absturz und Neustart.
+  function zustandLaden(){
+    try{
+      var roh = localStorage.getItem('k120_lauf');
+      if(!roh) return false;
+      var z = JSON.parse(roh);
+      if(typeof z.meter !== 'number' || typeof z.startZeit !== 'number') return false;
+      meter = z.meter; startZeit = z.startZeit; gesendet = z.gesendet || 0;
+      letzteLatLon = z.letzteLatLon || null; letzteZeit = z.letzteZeit || null;
+      return true;
+    }catch(e){ return false; }
+  }
+  function zustandSichern(){
+    try{
+      localStorage.setItem('k120_lauf', JSON.stringify({
+        meter: meter, startZeit: startZeit, gesendet: gesendet,
+        letzteLatLon: letzteLatLon, letzteZeit: letzteZeit
+      }));
+    }catch(e){}
+  }
+  function zustandLoeschen(){
+    try{ localStorage.removeItem('k120_lauf'); }catch(e){}
+    meter = 0; gesendet = 0; letzteLatLon = null; letzteZeit = null; startZeit = null;
+  }
+
+  var logZeilen = [];
   function melden(text){
     var z = new Date().toLocaleTimeString('de-CH');
-    log.insertAdjacentText('afterbegin', z + '  ' + text + '\n');
+    logZeilen.unshift(z + '  ' + text);
+    if(logZeilen.length > 100) logZeilen.length = 100;   // Log deckeln, sonst waechst es 24 h lang
+    log.textContent = logZeilen.join('\n');
+  }
+
+  // fetch mit Zeitlimit — ohne das koennen Anfragen bei schlechtem Netz ewig haengen.
+  function fetchMitLimit(url, opts, ms){
+    opts = opts || {};
+    var ctrl = new AbortController();
+    var t = setTimeout(function(){ ctrl.abort(); }, ms || 10000);
+    opts.signal = ctrl.signal;
+    return fetch(url, opts).finally(function(){ clearTimeout(t); });
   }
 
   function haversine(lat1, lon1, lat2, lon2){
@@ -138,7 +186,7 @@ und die Bildschirmsperre auf „nie" stellen.</div>
   }
 
   function holeAktuelleSha(cb){
-    fetch(apiBase(), { headers: { 'Authorization': 'Bearer ' + tokenEl.value.trim() } })
+    fetchMitLimit(apiBase(), { headers: { 'Authorization': 'Bearer ' + tokenEl.value.trim() } }, 10000)
       .then(function(r){ return r.status === 404 ? null : r.json(); })
       .then(function(j){ cb(j && j.sha ? j.sha : null); })
       .catch(function(){ cb(null); });
@@ -146,25 +194,45 @@ und die Bildschirmsperre auf „nie" stellen.</div>
 
   function purgeCache(){
     var url = 'https://purge.jsdelivr.net/gh/' + ownerEl.value.trim() + '/' + repoEl.value.trim() + '@main/live.json';
-    fetch(url).catch(function(){});
+    fetchMitLimit(url, {}, 8000).catch(function(){});
   }
 
   function senden(){
     if(!letzte) return;
+
+    // Unpraezise Fixes gar nicht erst verwenden — sonst "laeuft" das Geraet im Stehen.
+    if(letzte.coords.accuracy != null && letzte.coords.accuracy > MAX_UNGENAU){
+      melden('Fix verworfen (Genauigkeit ' + Math.round(letzte.coords.accuracy) + ' m)');
+      return;
+    }
+
+    var jetzt = Date.now();
     var lat = letzte.coords.latitude, lon = letzte.coords.longitude;
-    if(letzteLatLon){
+    if(letzteLatLon && letzteZeit){
       var schritt = haversine(letzteLatLon[0], letzteLatLon[1], lat, lon);
-      if(schritt >= 3 && schritt <= 400) meter += schritt;
+      var dt = Math.max(1, (jetzt - letzteZeit) / 1000);
+      // Obergrenze zeitbasiert statt fix: nach einer Funkpause sind grosse Schritte echt.
+      if(schritt >= MIN_SCHRITT && (schritt / dt) <= MAX_TEMPO){
+        meter += schritt;
+      }
     }
     letzteLatLon = [lat, lon];
+    letzteZeit = jetzt;
     var km = meter / 1000;
     kmEl.textContent = km.toFixed(2);
 
-    var vergangen = (Date.now() - startZeit) / 1000;
+    var vergangen = (jetzt - startZeit) / 1000;
     var pace = '–';
     if(km > 0.2 && vergangen > 0){
       var minProKm = (vergangen/60) / km;
       pace = Math.floor(minProKm) + ':' + pad(Math.round((minProKm % 1) * 60));
+    }
+
+    // Puls nur mitschicken, wenn er frisch ist — sonst steht stundenlang ein toter Wert drin.
+    var pulsFrisch = (aktuellerPuls != null && (jetzt - pulsZeit) < 30000);
+    if(!pulsFrisch && aktuellerPuls != null){
+      aktuellerPuls = null;
+      hrVal.textContent = '–';
     }
 
     var daten = {
@@ -172,15 +240,18 @@ und die Bildschirmsperre auf „nie" stellen.</div>
       elapsed: hms(vergangen),
       pace: pace,
       elev: letzte.coords.altitude != null ? Math.round(letzte.coords.altitude) : null,
-      hr: aktuellerPuls,
+      hr: pulsFrisch ? aktuellerPuls : null,
+      ble: !!(btDevice && btDevice.gatt && btDevice.gatt.connected),
+      accuracy: letzte.coords.accuracy != null ? Math.round(letzte.coords.accuracy) : null,
       stand: new Date().toISOString()
     };
+    zustandSichern();
 
     var content = b64(JSON.stringify(daten, null, 2));
     var body = { message: 'Live-Update ' + new Date().toLocaleTimeString('de-CH'), content: content };
     if(fileSha) body.sha = fileSha;
 
-    fetch(apiBase(), {
+    fetchMitLimit(apiBase(), {
       method: 'PUT',
       headers: {
         'Authorization': 'Bearer ' + tokenEl.value.trim(),
@@ -188,19 +259,20 @@ und die Bildschirmsperre auf „nie" stellen.</div>
         'Accept': 'application/vnd.github+json'
       },
       body: JSON.stringify(body)
-    }).then(function(r){
+    }, 12000).then(function(r){
       if(!r.ok) return r.json().then(function(j){ throw new Error(j.message || ('Status ' + r.status)); });
       return r.json();
     }).then(function(j){
       fileSha = j.content.sha;
       gesendet++; count.textContent = gesendet;
+      zustandSichern();
       purgeCache();
       melden('gesendet — ' + daten.km + ' km');
     }).catch(function(e){
-      melden('FEHLER: ' + e.message);
-      if(String(e.message).indexOf('does not match') >= 0 || String(e.message).indexOf('sha') >= 0){
-        holeAktuelleSha(function(sha){ fileSha = sha; });
-      }
+      melden('FEHLER: ' + (e && e.message ? e.message : 'unbekannt'));
+      // Nach JEDEM Fehlschlag die sha neu holen. Ein einmal veralteter sha wuerde sonst
+      // jeden weiteren Versuch scheitern lassen — der Sender waere fuer den Rest still.
+      holeAktuelleSha(function(sha){ fileSha = sha; });
     });
   }
 
@@ -215,7 +287,16 @@ und die Bildschirmsperre auf „nie" stellen.</div>
       localStorage.setItem('k120_token', tokenEl.value.trim());
     }catch(e){}
 
-    startZeit = Date.now();
+    if(zustandLaden()){
+      count.textContent = gesendet;
+      kmEl.textContent = (meter/1000).toFixed(2);
+      melden('Laufenden Stand fortgesetzt: ' + (meter/1000).toFixed(2) + ' km seit '
+             + new Date(startZeit).toLocaleTimeString('de-CH'));
+    } else {
+      startZeit = Date.now();
+      zustandSichern();
+      melden('Neuer Lauf gestartet.');
+    }
     holeAktuelleSha(function(sha){ fileSha = sha; });
 
     watchId = navigator.geolocation.watchPosition(function(p){
@@ -256,6 +337,16 @@ und die Bildschirmsperre auf „nie" stellen.</div>
 
   go.addEventListener('click', function(){ laeuft ? stop() : start(); });
 
+  document.getElementById('reset').addEventListener('click', function(){
+    if(laeuft){ melden('Erst "Senden stoppen", dann zurücksetzen.'); return; }
+    if(!confirm('Kilometerstand und Zeit wirklich auf 0 setzen?')) return;
+    zustandLoeschen();
+    kmEl.textContent = '0.00';
+    count.textContent = '0';
+    pos.textContent = '–'; acc.textContent = '–';
+    melden('Zurückgesetzt — bereit für einen neuen Lauf.');
+  });
+
   document.addEventListener('visibilitychange', function(){
     if(laeuft && document.visibilityState === 'visible' && 'wakeLock' in navigator){
       navigator.wakeLock.request('screen').then(function(w){ wakeLock = w; }).catch(function(){});
@@ -267,32 +358,63 @@ und die Bildschirmsperre auf „nie" stellen.</div>
     hrBtn.disabled = true;
     hrBtn.textContent = 'Bluetooth nicht verfügbar (iPhone?)';
   }
+  function pulsLesen(e){
+    var v = e.target.value;
+    var flags = v.getUint8(0);
+    var hr = (flags & 0x1) ? v.getUint16(1, true) : v.getUint8(1);
+    aktuellerPuls = hr;
+    pulsZeit = Date.now();
+    hrVal.textContent = hr;
+  }
+
+  // Verbindet mit dem bereits ausgewaehlten Geraet. Das geht OHNE neue Nutzergeste,
+  // solange die Seite nicht neu geladen wurde — darum der Auto-Reconnect.
+  function btVerbinden(){
+    if(!btDevice) return Promise.reject(new Error('kein Geraet gewaehlt'));
+    return btDevice.gatt.connect()
+      .then(function(server){ return server.getPrimaryService('heart_rate'); })
+      .then(function(service){ return service.getCharacteristic('heart_rate_measurement'); })
+      .then(function(ch){
+        btChar = ch;
+        return ch.startNotifications().then(function(){
+          ch.removeEventListener('characteristicvaluechanged', pulsLesen);
+          ch.addEventListener('characteristicvaluechanged', pulsLesen);
+          hrBtn.textContent = 'Pulsgurt verbunden';
+          hrBtn.disabled = true;
+          melden('Pulsgurt verbunden, empfange Werte.');
+        });
+      });
+  }
+
+  function btAbbruch(){
+    // Wichtig: alten Wert wegwerfen, sonst steht stundenlang ein falscher Puls auf der Website.
+    aktuellerPuls = null;
+    hrVal.textContent = '–';
+    hrBtn.disabled = false;
+    hrBtn.textContent = 'Pulsgurt verbinden';
+    melden('Pulsgurt getrennt — versuche automatisch neu zu verbinden.');
+    if(reconnectTimer) clearTimeout(reconnectTimer);
+    var versuch = function(){
+      if(!btDevice || (btDevice.gatt && btDevice.gatt.connected)) return;
+      btVerbinden().catch(function(){
+        reconnectTimer = setTimeout(versuch, 5000);   // alle 5 s weiterversuchen
+      });
+    };
+    reconnectTimer = setTimeout(versuch, 2000);
+  }
+
   hrBtn.addEventListener('click', function(){
     if(!('bluetooth' in navigator)){ return; }
     navigator.bluetooth.requestDevice({
       filters: [{ services: ['heart_rate'] }]
     }).then(function(device){
+      btDevice = device;
       melden('Gurt gefunden: ' + (device.name || 'unbekannt'));
-      return device.gatt.connect();
-    }).then(function(server){
-      return server.getPrimaryService('heart_rate');
-    }).then(function(service){
-      return service.getCharacteristic('heart_rate_measurement');
-    }).then(function(ch){
-      return ch.startNotifications().then(function(){
-        ch.addEventListener('characteristicvaluechanged', function(e){
-          var v = e.target.value;
-          var flags = v.getUint8(0);
-          var hr = (flags & 0x1) ? v.getUint16(1, true) : v.getUint8(1);
-          aktuellerPuls = hr;
-          hrVal.textContent = hr;
-        });
-        hrBtn.textContent = 'Pulsgurt verbunden';
-        hrBtn.disabled = true;
-        melden('Pulsgurt verbunden, empfange Werte.');
-      });
+      device.removeEventListener('gattserverdisconnected', btAbbruch);
+      device.addEventListener('gattserverdisconnected', btAbbruch);
+      return btVerbinden();
     }).catch(function(e){
-      melden('Pulsgurt-Fehler: ' + e.message);
+      melden('Pulsgurt-Fehler: ' + (e && e.message ? e.message : 'unbekannt'));
     });
   });
 })();
