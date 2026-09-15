@@ -436,6 +436,14 @@
   .slot.has-logo img{width:100%; height:100%; max-width:none; max-height:none; object-fit:cover; display:block;}
   .rowlab{font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.16em;
     text-transform:uppercase; color:var(--ink-3); margin-bottom:8px;}
+  @media (max-width:699px){
+    .rows{margin-top:30px; gap:10px;}
+    .row-track{gap:9px;}
+    .slot{padding:10px 14px;}
+    .row-main .slot{height:70px; min-width:148px; font-size:10.5px;}
+    .row-sub .slot{height:48px; min-width:113px; font-size:9px;}
+    .slot img{max-width:120px;}
+  }
 
   /* ---------------- KONTAKT ---------------- */
   .form{display:grid; grid-template-columns:1fr; gap:0 24px;}
@@ -1329,7 +1337,8 @@
       if(href){ box.href = href; box.target = '_blank'; box.rel = 'noopener noreferrer'; }
       if(item.logo){
         var img = document.createElement('img');
-        img.src = item.logo; img.alt = item.name || ''; img.loading = 'lazy';
+        img.src = item.logo; img.alt = item.name || '';
+        img.decoding = 'async';
         box.appendChild(img);
       } else {
         var s2 = document.createElement('span'); s2.textContent = item.name || ''; box.appendChild(s2);
