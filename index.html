@@ -1059,6 +1059,7 @@
           <div class="tile"><div class="k">Puls aktuell</div><div class="v tnum" id="tHr">–<small>bpm</small></div></div>
           <div class="tile"><div class="k">Puls Ø</div><div class="v tnum" id="tHrAvg">–<small>bpm</small></div></div>
           <div class="tile"><div class="k">Höhenmeter</div><div class="v tnum" id="tElev">–<small>m</small></div></div>
+          <div class="tile"><div class="k">Kalorien</div><div class="v tnum" id="tKcal">–<small>kcal</small></div></div>
           <div class="tile"><div class="k">Temperatur</div><div class="v tnum" id="tTemp">–<small>°C</small></div></div>
         </div>
         <div class="livebar">
@@ -1669,6 +1670,7 @@
     set('tHr', aktuell && d.hr != null ? Math.round(d.hr) : '–', aktuell && d.hr != null ? 'bpm' : '');
     set('tHrAvg', d.hrAvg != null ? Math.round(d.hrAvg) : '–', d.hrAvg != null ? 'bpm' : '');
     set('tElev', d.elev != null ? Math.round(d.elev) : '–', 'm');
+    set('tKcal', d.kcal != null ? Math.round(d.kcal) : '–', d.kcal != null ? 'kcal' : '');
     var wTemp = weatherNow ? weatherNow.temp : d.temp;
     var wCond = weatherNow ? weatherNow.cond : d.cond;
     set('tTemp', wTemp != null && isFinite(wTemp) ? Math.round(wTemp) : '–', '°C', wCond || '');
@@ -1726,6 +1728,7 @@
       hr: 138 + Math.sin(t/4)*12,
       hrAvg: 141,
       elev: km / CONFIG.DISTANCE_KM * 2200,
+      kcal: km * 62,
       temp: 14 + Math.sin(t/30)*5,
       cond: demoConds[Math.floor(t/25) % demoConds.length],
       raised: CONFIG.RAISED
