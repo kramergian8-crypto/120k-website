@@ -1247,12 +1247,17 @@
       window.scrollTo({ top:0, behavior:'auto' });
     }
     var isDemo = c.query.indexOf('demo=1') >= 0;
+    // preview=1: zeigt die ECHTEN Daten (kein Fake), umgeht aber die
+    // Start-Datum-Sperre — zum Testen vor dem Renntag, mit einem festen,
+    // merkbaren Link. Bewusst getrennt von demo=1 (das zeigt erfundene
+    // Werte), damit ein echter Test nicht mit Fake-Daten verwechselt wird.
+    var isPreview = c.query.indexOf('preview=1') >= 0;
     if(c.route === '/live' && CONFIG.LIVE_GATE && CONFIG.LIVE_GATE.on
-       && Date.now() < startAt && !isDemo){
+       && Date.now() < startAt && !isDemo && !isPreview){
       location.hash = '#/';          // vor dem Start ist die Live-Seite zu
       return;
     }
-    if(c.route === '/live') setupLive(isDemo || !CONFIG.LIVE_FEED);
+    if(c.route === '/live') setupLive(isDemo, isPreview || !CONFIG.LIVE_FEED);
     kickReveals();
   }
   window.addEventListener('hashchange', render);
@@ -1734,7 +1739,7 @@
       raised: CONFIG.RAISED
     };
   }
-  function setupLive(demo){
+  function setupLive(demo, forceZeigen){
     if(liveTimer){ clearInterval(liveTimer); liveTimer = null; }
     if(weatherTimer){ clearInterval(weatherTimer); weatherTimer = null; }
     loadWeather();
@@ -1742,7 +1747,7 @@
       weatherTimer = setInterval(loadWeather, CONFIG.WEATHER.refreshMs || 600000);
     }
     var started = Date.now() >= startAt;
-    var showLive = demo || started;
+    var showLive = demo || started || forceZeigen;
     document.getElementById('liveLocked').hidden = showLive;
     document.getElementById('liveOn').hidden = !showLive;
     var src = document.getElementById('liveSource');
