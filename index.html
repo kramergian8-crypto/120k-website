@@ -1131,8 +1131,13 @@
     FORM_ENDPOINT: 'https://api.web3forms.com/submit',
     FORM_ACCESS_KEY: '1782ba50-c6e9-4675-a410-50cec741513f',
     // Live-Daten: URL, die JSON mit den Werten liefert. Leer = noch nichts verbunden.
-    LIVE_FEED: 'https://cdn.jsdelivr.net/gh/kramergian8-crypto/120k-live@main/live.json',
-    LIVE_POLL_MS: 20000,
+    // raw.githubusercontent.com statt jsDelivr: jsDelivr cached @main-Branches
+    // bewusst bis zu 12h serverseitig (fuer stabile Bibliotheken gedacht,
+    // nicht fuer Live-Daten, die sich alle 15s aendern). raw.githubusercontent
+    // hat nur 5 Minuten Cache und revalidiert zuverlaessiger — fuer ein 24h-
+    // Rennen weit mehr als ausreichend fluessig.
+    LIVE_FEED: 'https://raw.githubusercontent.com/kramergian8-crypto/120k-live/main/live.json',
+    LIVE_POLL_MS: 10000,
     // Wetter: echte Werte von Open-Meteo (gratis, ohne Anmeldung, ohne Schlüssel).
     WEATHER: {
       on: true,
@@ -1619,7 +1624,25 @@
   }
 
   /* ---------------- LIVE-TRACKING ---------------- */
-  var liveTimer = null, demoT0 = 0;
+  var liveTimer = null, demoT0 = 0, tickTimer = null;
+  // Letzter empfangener Datensatz + Zeitpunkt des Empfangs — damit die Uhr
+  // jede Sekunde lokal weiterlaufen kann, statt nur bei jedem Datenabruf
+  // (alle paar Sekunden) sichtbar zu "ruckeln".
+  var letzteLiveDaten = null, letzteLiveEmpfangszeit = 0;
+  // Laeuft jede Sekunde und zaehlt "Unterwegs" lokal weiter, indem sie die
+  // seit dem letzten Datenabruf vergangene Zeit dazurechnet — so wirkt die
+  // Uhr fluessig, auch wenn neue Daten nur alle 10-20s eintreffen. Sobald
+  // ein neuer Abruf kommt, korrigiert sich der Wert automatisch wieder auf
+  // den echten Stand (kein Drift ueber laengere Zeit).
+  function tickAnzeige(){
+    if(!letzteLiveDaten) return;
+    var basisSek = parseElapsedSek(letzteLiveDaten.elapsed);
+    if(basisSek == null) return;
+    var vergangen = Math.floor((Date.now() - letzteLiveEmpfangszeit) / 1000);
+    var sek = basisSek + Math.max(0, vergangen);
+    var el = document.getElementById('tTime');
+    if(el) el.textContent = pad(Math.floor(sek/3600)) + ':' + pad(Math.floor(sek%3600/60)) + ':' + pad(sek%60);
+  }
   // Bewertet, wie alt die gelieferten Daten sind. Ohne Zeitstempel (Demo) gilt "live".
   // Gibt zurueck: 'live' | 'alt' | 'weg'
   function frischePruefen(stand){
@@ -1651,6 +1674,8 @@
   }
 
   function setLive(d){
+    letzteLiveDaten = d;
+    letzteLiveEmpfangszeit = Date.now();
     var frische = frischePruefen(d.stand);
     var done = Math.max(0, Math.min(CONFIG.DISTANCE_KM, d.km || 0));
     var left = Math.max(0, CONFIG.DISTANCE_KM - done);
@@ -1741,6 +1766,7 @@
   }
   function setupLive(demo, forceZeigen){
     if(liveTimer){ clearInterval(liveTimer); liveTimer = null; }
+    if(tickTimer){ clearInterval(tickTimer); tickTimer = null; }
     if(weatherTimer){ clearInterval(weatherTimer); weatherTimer = null; }
     loadWeather();
     if(CONFIG.WEATHER && CONFIG.WEATHER.on){
@@ -1780,6 +1806,7 @@
     };
     pull();
     liveTimer = setInterval(pull, CONFIG.LIVE_POLL_MS);
+    tickTimer = setInterval(tickAnzeige, 1000);
   }
 
   /* ---------- FEATURE FLAG APPLICATION ---------- */
