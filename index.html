@@ -1054,6 +1054,8 @@
           <div class="tile"><div class="k">Verbleibend</div><div class="v tnum" id="tLeft">–<small>km</small></div></div>
           <div class="tile"><div class="k">Unterwegs</div><div class="v tnum" id="tTime">–</div></div>
           <div class="tile"><div class="k">Tempo</div><div class="v tnum" id="tPace">–<small>min/km</small></div></div>
+          <div class="tile"><div class="k">Restzeit (ca.)</div><div class="v tnum" id="tRemain">–</div></div>
+          <div class="tile"><div class="k">Ankunft (ca.)</div><div class="v tnum" id="tETA">–</div></div>
           <div class="tile"><div class="k">Puls aktuell</div><div class="v tnum" id="tHr">–<small>bpm</small></div></div>
           <div class="tile"><div class="k">Puls Ø</div><div class="v tnum" id="tHrAvg">–<small>bpm</small></div></div>
           <div class="tile"><div class="k">Höhenmeter</div><div class="v tnum" id="tElev">–<small>m</small></div></div>
@@ -1195,6 +1197,20 @@
     return 'CHF ' + Math.round(n).toLocaleString('de-CH').replace(/ | /g, "'");
   };
   var pad = function(n){ return String(n).padStart(2,'0'); };
+  // Parst "HH:MM:SS" zu Sekunden. Robust gegen fehlende/kaputte Werte.
+  function parseElapsedSek(s){
+    if(!s || typeof s !== 'string') return null;
+    var parts = s.split(':').map(Number);
+    if(parts.length !== 3 || parts.some(function(n){ return !isFinite(n); })) return null;
+    return parts[0]*3600 + parts[1]*60 + parts[2];
+  }
+  // Formatiert Minuten als "Xh Ym" fuer die Restzeit-Kachel.
+  function fmtDauer(min){
+    if(min == null || !isFinite(min) || min < 0) return '–';
+    var h = Math.floor(min/60), m = Math.round(min%60);
+    if(h <= 0) return m + ' min';
+    return h + 'h ' + pad(m) + 'min';
+  }
 
   /* ---------------- ROUTER ---------------- */
   var pages = { '/':'page-home', '/videos':'page-videos', '/live':'page-live' };
@@ -1652,6 +1668,18 @@
     var wTemp = weatherNow ? weatherNow.temp : d.temp;
     var wCond = weatherNow ? weatherNow.cond : d.cond;
     set('tTemp', wTemp != null && isFinite(wTemp) ? Math.round(wTemp) : '–', '°C', wCond || '');
+    // Restzeit & Ankunft: aus dem bisherigen Durchschnittstempo hochgerechnet.
+    // Nur anzeigen, wenn die Daten frisch sind und genug Strecke gelaufen ist,
+    // sonst waere die Hochrechnung Zufall statt Schaetzung.
+    var elapsedSek = parseElapsedSek(d.elapsed);
+    var remainMin = null, eta = null;
+    if(aktuell && done > 0.3 && elapsedSek && left > 0){
+      var sekProKm = elapsedSek / done;
+      remainMin = (sekProKm * left) / 60;
+      eta = new Date(Date.now() + remainMin*60000);
+    }
+    set('tRemain', fmtDauer(remainMin), '');
+    set('tETA', eta ? eta.toLocaleTimeString('de-CH', { hour:'2-digit', minute:'2-digit' }) : '–', eta ? 'Uhr' : '');
     document.getElementById('liveBar').style.width = (frac*100) + '%';
     document.getElementById('liveProg').textContent = Math.round(frac*100) + ' % der Strecke';
     var kmLbl = document.getElementById('liveKm');
