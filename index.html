@@ -1794,7 +1794,11 @@
       return;
     }
     var pull = function(){
-      fetch(CONFIG.LIVE_FEED, { cache:'no-store' })
+      // Cache-Buster in der URL: raw.githubusercontent.com cached pro
+      // CDN-Kante bis zu 5 Minuten lang, unabhaengig vom "no-store"-Header —
+      // jede Anfrage-URL einzigartig zu machen umgeht das zuverlaessig,
+      // weil der Cache-Schluessel die volle URL inklusive Query enthaelt.
+      fetch(CONFIG.LIVE_FEED + '?t=' + Date.now(), { cache:'no-store' })
         .then(function(r){ return r.json(); })
         .then(function(d){
           setLive(d);
