@@ -1131,13 +1131,16 @@
     FORM_ENDPOINT: 'https://api.web3forms.com/submit',
     FORM_ACCESS_KEY: '1782ba50-c6e9-4675-a410-50cec741513f',
     // Live-Daten: URL, die JSON mit den Werten liefert. Leer = noch nichts verbunden.
-    // raw.githubusercontent.com statt jsDelivr: jsDelivr cached @main-Branches
-    // bewusst bis zu 12h serverseitig (fuer stabile Bibliotheken gedacht,
-    // nicht fuer Live-Daten, die sich alle 15s aendern). raw.githubusercontent
-    // hat nur 5 Minuten Cache und revalidiert zuverlaessiger — fuer ein 24h-
-    // Rennen weit mehr als ausreichend fluessig.
-    LIVE_FEED: 'https://raw.githubusercontent.com/kramergian8-crypto/120k-live/main/live.json',
-    LIVE_POLL_MS: 3000,
+    // Ueber die GitHub-API statt raw.githubusercontent/jsDelivr: beide CDNs
+    // cachen den Dateiinhalt pro Kante minutenlang, UNABHAENGIG vom
+    // Query-String (Cache-Buster wurde getestet und wirkt nicht dauerhaft).
+    // Die API selbst cached nur 60s serverseitig und ist damit die einzige
+    // Quelle mit einer verlaesslichen, kurzen Obergrenze. Dafuer max. 60
+    // Anfragen/Stunde (pro Besucher-IP) — LIVE_POLL_MS ist absichtlich nicht
+    // kleiner als 60s, haeufiger fragen wuerde eh nur denselben 60s-Cache
+    // treffen und unnoetig das Limit verbrauchen.
+    LIVE_FEED: 'https://api.github.com/repos/kramergian8-crypto/120k-live/contents/live.json',
+    LIVE_POLL_MS: 60000,
     // Wetter: echte Werte von Open-Meteo (gratis, ohne Anmeldung, ohne Schlüssel).
     WEATHER: {
       on: true,
@@ -1794,18 +1797,24 @@
       return;
     }
     var pull = function(){
-      // Cache-Buster in der URL: raw.githubusercontent.com cached pro
-      // CDN-Kante bis zu 5 Minuten lang, unabhaengig vom "no-store"-Header —
-      // jede Anfrage-URL einzigartig zu machen umgeht das zuverlaessig,
-      // weil der Cache-Schluessel die volle URL inklusive Query enthaelt.
-      fetch(CONFIG.LIVE_FEED + '?t=' + Date.now(), { cache:'no-store' })
-        .then(function(r){ return r.json(); })
+      // "Accept: application/vnd.github.raw+json" liefert den Dateiinhalt
+      // direkt (nicht Base64-verpackt in einer JSON-Huelle) — sonst muesste
+      // hier zusaetzlich dekodiert werden.
+      fetch(CONFIG.LIVE_FEED, { cache:'no-store', headers: { 'Accept': 'application/vnd.github.raw+json' } })
+        .then(function(r){
+          if(r.status === 403 || r.status === 429){
+            throw new Error('rate-limit');
+          }
+          return r.json();
+        })
         .then(function(d){
           setLive(d);
           if(src) src.textContent = 'Zuletzt aktualisiert: ' + new Date().toLocaleTimeString('de-CH');
         })
-        .catch(function(){
-          if(src) src.textContent = 'Verbindung zur Datenquelle unterbrochen — versuche es weiter.';
+        .catch(function(e){
+          if(src) src.textContent = (e && e.message === 'rate-limit')
+            ? 'Kurzzeitig zu viele Abfragen — versuche es in einer Minute automatisch weiter.'
+            : 'Verbindung zur Datenquelle unterbrochen — versuche es weiter.';
         });
     };
     pull();
