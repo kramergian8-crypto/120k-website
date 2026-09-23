@@ -766,14 +766,15 @@
           <div class="bar-l"><span>Bereits gesammelt</span><span id="goalPct">0 %</span></div>
           <p class="lead" style="margin-top:24px;">Erstes Ziel: 1'000 Franken. Wird's erreicht, setzen wir höher — nach oben offen. <strong>80 % deiner Spende gehen an den guten Zweck, 20 % decken Ausrüstung, Ernährung und weitere Kosten des Projekts.</strong></p>
           <div class="spend-callout">
-            <strong>Welcher gute Zweck es wird, geben wir in den nächsten Tagen bekannt.</strong> Der Zahlungsweg wird gerade eingerichtet und folgt ebenfalls in den nächsten Tagen.
+            <strong>Wir spenden an Wilderness International.</strong> Sie schützen und kaufen Regenwald, um ihn dauerhaft vor Abholzung zu bewahren — mit 1 Franken wird 1 Quadratmeter Regenwald geschützt. Nach Abschluss der Aktion bekommen wir dafür eine offizielle Community-Urkunde.
           </div>
           <div class="raffle">
             <h4>Und du kannst etwas gewinnen</h4>
-            <p>Wer spendet, nimmt teil: pro 10 Franken ein Los für zwei Preise.</p>
+            <p>Wer spendet, nimmt teil: pro 10 Franken ein Los für drei Preise.</p>
             <div class="prizes">
               <div class="prize"><div class="pn">Preis 1</div><div class="pt">Niederhornbahn<br>2 Tickets</div></div>
               <div class="prize"><div class="pn">Preis 2</div><div class="pt">Niesenbahn<br>1 Ticket</div></div>
+              <div class="prize"><div class="pn">Preis 3</div><div class="pt">Stockhornbahn<br>1 Ticket</div></div>
             </div>
             <div class="lose"><div class="n tnum" id="loseN">0</div><div class="t">Lose bei deinem Betrag</div></div>
             <p class="formnote" style="margin-top:14px;">Spendenaktion und Verlosung laufen bis 31.10.2026.</p>
@@ -1064,10 +1065,23 @@
     BANNER_UNTIL: '2026-09-26T10:00:00+02:00',
     GOAL: 1000,
     RAISED: 0,
+    // Ziel wächst automatisch: Startziel 1000, wird bei Erreichen immer um
+    // diesen Schritt erhöht, ohne Ende. Der echte Wert kommt live vom
+    // Spenden-Worker (DONATION_FEED) — GOAL/RAISED hier sind nur die
+    // Anzeige, bevor die erste Antwort da ist.
+    GOAL_SCHRITT: 200,
     DISTANCE_KM: 120,
     HOURS: 24,
-    // Wenn leer: Spenden-Button zeigt "kommt bald" statt echter Weiterleitung
-    DONATE_URL: '',
+    // TWINT-Business-Zahlungslink. Kein Query-Parameter fuer den Betrag
+    // moeglich — TWINT fragt den Betrag selbst nochmal ab.
+    DONATE_URL: 'https://go.twint.ch/1/e/tw?tw=acq.BCl2FNmtSw-J7trK037g1T8pKSpituDw8pI7WlTPircOy0NVxlCJIp06wckuHDOm',
+    // Spendenstand: eigener Cloudflare-Worker, der donations.json aus dem
+    // Daten-Repo liefert (gleiches Prinzip wie LIVE_FEED). TWINT selbst hat
+    // keine automatische Zahlungsbestaetigung fuer einfache Business-Links,
+    // deshalb wird der Stand von der Crew manuell ueber /spenden-admin.html
+    // eingetragen, sobald eine Zahlung eingeht.
+    DONATION_FEED: 'https://120k-donations.kramergian8.workers.dev',
+    DONATION_POLL_MS: 8000,
     // Formular: Endpunkt eines Dienstes (Formspree oder Web3Forms). Leer = Formular sendet NICHT.
     //   Formspree:  FORM_ENDPOINT = 'https://formspree.io/f/DEINCODE'   (FORM_ACCESS_KEY leer lassen)
     //   Web3Forms:  FORM_ENDPOINT = 'https://api.web3forms.com/submit'  + FORM_ACCESS_KEY = 'dein-key'
@@ -1336,6 +1350,8 @@
     document.querySelectorAll('#quick button').forEach(function(b){
       b.classList.toggle('on', parseFloat(b.dataset.v) === total);
     });
+    var donateBtn = document.getElementById('donateBtn');
+    if(donateBtn && CONFIG.DONATE_URL) donateBtn.textContent = 'Jetzt ' + fmtChf(total) + ' spenden';
   }
   amtEl.addEventListener('input', calc);
   document.querySelectorAll('#quick button').forEach(function(b){
@@ -1346,11 +1362,33 @@
   });
   calc();
 
-  document.getElementById('goalTxt').textContent = fmtChf(CONFIG.GOAL);
-  document.getElementById('raised').textContent = fmtChf(CONFIG.RAISED);
-  var pct = CONFIG.GOAL > 0 ? Math.min(100, CONFIG.RAISED / CONFIG.GOAL * 100) : 0;
-  document.getElementById('goalPct').textContent = Math.round(pct) + ' %';
-  setTimeout(function(){ document.getElementById('goalBar').style.width = pct + '%'; }, 300);
+  function updateGoalUI(raised, goal){
+    CONFIG.RAISED = raised; CONFIG.GOAL = goal;
+    document.getElementById('goalTxt').textContent = fmtChf(goal);
+    document.getElementById('raised').textContent = fmtChf(raised);
+    var pct = goal > 0 ? Math.min(100, raised / goal * 100) : 0;
+    document.getElementById('goalPct').textContent = Math.round(pct) + ' %';
+    setTimeout(function(){ document.getElementById('goalBar').style.width = pct + '%'; }, 300);
+  }
+  updateGoalUI(CONFIG.RAISED, CONFIG.GOAL);
+
+  /* ---------------- SPENDENSTAND (manuell gepflegt, siehe DONATION_FEED) ---------------- */
+  function setupSpenden(){
+    if(!CONFIG.DONATION_FEED) return;
+    function pull(){
+      fetch(CONFIG.DONATION_FEED + '/status', { cache: 'no-store' })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(d && typeof d.total === 'number'){
+            updateGoalUI(d.total, d.ziel || (d.total + CONFIG.GOAL_SCHRITT));
+          }
+        })
+        .catch(function(){ /* still shows the last known stand */ });
+    }
+    pull();
+    setInterval(pull, CONFIG.DONATION_POLL_MS);
+  }
+  setupSpenden();
 
   /* ---------------- SPONSOR-REIHEN ---------------- */
   function fillRow(el, names, placeholder, count){
@@ -1778,7 +1816,7 @@
         donateBtn.target = '_blank';
         donateBtn.rel = 'noopener noreferrer';
         donateBtn.textContent = 'Jetzt ' + document.getElementById('total').textContent + ' spenden';
-        if(donateNote) donateNote.textContent = 'Du wirst zu unserer Spenden-Plattform weitergeleitet. Der Betrag geht direkt an den guten Zweck.';
+        if(donateNote) donateNote.textContent = 'Du wirst zu TWINT weitergeleitet — dort bitte den Betrag noch einmal eingeben und bestätigen.';
       }
     }
   }
