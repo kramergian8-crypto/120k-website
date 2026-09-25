@@ -382,9 +382,11 @@
   .brow .lbl{font-size:14px; color:var(--ink-2);}
   .brow .val{font-family:'Anton',sans-serif; font-size:23px; font-variant-numeric:tabular-nums;}
   .brow.hi .val{color:var(--red); font-size:30px;}
-  .donor-fields{margin-top:22px; padding-top:18px; border-top:1px solid var(--hair);}
-  .donor-fields .f{margin-bottom:14px;}
-  .donor-fields .formnote{margin-top:0; margin-bottom:14px;}
+  .zweck-box{margin-top:22px; padding:18px 18px 16px; border:2px solid var(--red); border-radius:14px; background:rgba(226,35,26,.07);}
+  .zweck-box .zb-k{font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--red); margin-bottom:8px;}
+  .zweck-box .zb-t{font-size:19px; line-height:1.35; font-weight:600;}
+  .zweck-box .zb-s{margin-top:8px; font-size:14px; line-height:1.45; opacity:.85;}
+  .zweck-box .formmsg{margin-top:10px;}
   .spend-callout{margin-top:18px; background:var(--red); color:#fff; padding:16px 18px; font-size:14px; line-height:1.55;}
   .spend-callout strong{display:block; margin-bottom:4px; font-weight:700;}
   .raffle{margin-top:26px; border:1px solid var(--hair); background:var(--paper-2); padding:20px;}
@@ -828,7 +830,7 @@
           </div>
           <div class="raffle">
             <h4>Und du kannst etwas gewinnen</h4>
-            <p>Wer spendet, nimmt teil: pro 10 Franken ein Los für drei Preise. Teilnahme nur mit vollständigem Namen und der E-Mail-Adresse, die du unten beim Spenden angibst.</p>
+            <p>Wer spendet, nimmt teil: pro 10 Franken ein Los für drei Preise. <strong>Teilnahme nur mit deiner E-Mail-Adresse im TWINT-Zahlungszweck.</strong></p>
             <div class="prizes">
               <div class="prize"><div class="pn">Preis 1</div><div class="pt">Niederhornbahn<br>2 Tickets</div></div>
               <div class="prize"><div class="pn">Preis 2</div><div class="pt">Niesenbahn<br>1 Ticket</div></div>
@@ -856,11 +858,10 @@
             <div class="brow hi"><span class="lbl">Deine Spende</span><span class="val tnum" id="total">CHF 50</span></div>
           </div>
           <p class="formnote">Jeder Rappen zählt — auf 120 Kilometer gerechnet. Die Projektkosten decken Ausrüstung, Ernährung und Material.</p>
-          <div class="donor-fields" id="donorFields">
-            <p class="formnote">Für die Verlosung brauchen wir deinen vollständigen Namen und deine E-Mail — nur so können wir dich bei einem Gewinn erreichen und die Teilnahme deiner TWINT-Zahlung zuordnen. Beides ist Pflicht, um zu spenden. Wir verwenden die Angaben ausschliesslich für die Verlosung.</p>
-            <div class="f"><label for="dn">Vor- und Nachname</label><input id="dn" name="name" type="text" placeholder="Vor- und Nachname" /></div>
-            <div class="f"><label for="de">E-Mail</label><input id="de" name="email" type="email" placeholder="name@example.ch" /></div>
-            <div class="f"><label for="dp">Telefon <span style="text-transform:none; opacity:.7;">(optional)</span></label><input id="dp" name="phone" type="tel" placeholder="079 123 45 67" /></div>
+          <div class="zweck-box" id="donorFields">
+            <div class="zb-k">Wichtig für die Verlosung</div>
+            <div class="zb-t">Schreib bei TWINT im Feld <strong>«Zahlungszweck»</strong> deine <strong>E-Mail-Adresse</strong> und deinen Namen.</div>
+            <div class="zb-s">Nur so können wir dich bei einem Gewinn erreichen. Ohne E-Mail im Zahlungszweck nimmst du nicht an der Verlosung teil.</div>
             <div class="formmsg" id="donateMsg" hidden></div>
           </div>
           <a class="btn btn-red" id="donateBtn" href="#/#kontakt" style="margin-top:18px; width:100%;">Spenden</a>
@@ -1430,82 +1431,21 @@
   });
   calc();
 
-  /* ---------------- SPENDE: Angaben (für Verlosung) + Weiterleitung zu TWINT ---------------- */
+  /* ---------------- SPENDE: Weiterleitung zu TWINT (E-Mail kommt in den Zahlungszweck) ---------------- */
   (function(){
-    var dn = document.getElementById('dn'), de = document.getElementById('de'), dp = document.getElementById('dp');
     var donateMsg = document.getElementById('donateMsg');
     var donateBtn = document.getElementById('donateBtn');
     if(!donateBtn) return;
-    function sayDonate(text, ok){
-      if(!donateMsg) return;
-      donateMsg.hidden = false; donateMsg.textContent = text;
-      donateMsg.style.color = ok ? '#2E8B57' : '#E2231A';
-    }
-    function hasFullName(v){
-      return v.trim().split(/\s+/).filter(Boolean).length >= 2;
-    }
-    function localISO(){
-      var d = new Date();
-      var tz = d.getTimezoneOffset() * 60000;
-      return new Date(d.getTime() - tz).toISOString().slice(0, 19);
-    }
-    // Rückkehrende Spender: Name/E-Mail aus localStorage vorausfüllen
-    try{
-      var savedName = localStorage.getItem('120k_donor_name');
-      var savedMail = localStorage.getItem('120k_donor_email');
-      if(savedName && dn) dn.value = savedName;
-      if(savedMail && de) de.value = savedMail;
-    }catch(err){}
-
     donateBtn.addEventListener('click', function(e){
-      if(!CONFIG.DONATE_URL) return; // Fallback: Link-Standardverhalten, solange Spenden noch nicht aufgeschaltet ist
+      if(!CONFIG.DONATE_URL) return;
       e.preventDefault();
-      var name = (dn && dn.value.trim()) || '';
-      var mail = (de && de.value.trim()) || '';
-      var phone = (dp && dp.value.trim()) || '';
-      if(!name || !hasFullName(name)){
-        sayDonate('Bitte deinen vollständigen Namen (Vor- und Nachname) eingeben.', false);
-        if(dn) dn.focus();
-        return;
-      }
-      if(!mail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){
-        sayDonate('Bitte eine gültige E-Mail-Adresse eingeben — wir brauchen sie für die Verlosung.', false);
-        if(de) de.focus();
-        return;
-      }
-      if(donateMsg) donateMsg.hidden = true;
-      try{
-        localStorage.setItem('120k_donor_name', name);
-        localStorage.setItem('120k_donor_email', mail);
-      }catch(err){}
-
       var amount = Math.max(0, Math.round((parseFloat(amtEl.value) || 0) * 100) / 100);
-      var lose = Math.floor(amount / 10);
-      if(CONFIG.FORM_ENDPOINT){
-        var payload = {
-          subject: 'Spende (Verlosung): CHF ' + amount + ' – ' + name,
-          name: name, email: mail, phone: phone,
-          amount: amount, lose: lose,
-          zeitpunkt: localISO(),
-          hinweis: 'Zuordnung: Betrag + Uhrzeit mit TWINT-Zahlung abgleichen'
-        };
-        if(CONFIG.FORM_ACCESS_KEY){
-          payload.access_key = CONFIG.FORM_ACCESS_KEY;
-          payload.from_name = name;
-          payload.replyto = mail;
-        }
-        try{
-          fetch(CONFIG.FORM_ENDPOINT, {
-            method: 'POST',
-            keepalive: true,
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        }catch(err){ /* Weiterleitung zu TWINT passiert trotzdem */ }
+      if(donateMsg){
+        donateMsg.hidden = false;
+        donateMsg.style.color = '#2E8B57';
+        donateMsg.textContent = 'Weiter zu TWINT: ' + fmtChf(amount) + ' eingeben und im Zahlungszweck deine E-Mail-Adresse angeben.';
       }
-      sayDonate('Weiter zu TWINT – bitte dort ' + fmtChf(amount) + ' eingeben und bestätigen.', true);
-      // Kurz warten, damit der Hinweis sichtbar ist und die Anmeldung sicher rausgeht.
-      setTimeout(function(){ location.href = CONFIG.DONATE_URL; }, 1200);
+      setTimeout(function(){ location.href = CONFIG.DONATE_URL; }, 1800);
     });
   })();
 
@@ -2432,7 +2372,7 @@
         donateBtn.target = '_blank';
         donateBtn.rel = 'noopener noreferrer';
         donateBtn.textContent = 'Jetzt ' + document.getElementById('total').textContent + ' spenden';
-        if(donateNote) donateNote.textContent = 'Zwei Schritte: 1) Name und E-Mail oben eintragen. 2) Weiterleitung zu TWINT — dort bitte den Betrag noch einmal eingeben und bestätigen.';
+        if(donateNote) donateNote.textContent = 'Bei TWINT: Betrag eingeben und im Zahlungszweck deine E-Mail-Adresse angeben.';
       }
     }
   }
