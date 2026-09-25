@@ -2103,9 +2103,10 @@
     var frische = frischePruefen(d.stand);
     var dispKm = computeDisplayKm(d);
     var rawKm = Math.max(0, dispKm.km);
-    var done = Math.max(0, Math.min(CONFIG.DISTANCE_KM, rawKm));
+    // Kein Deckel bei 120: die echte Strecke misst 120.6 km, Umwege koennen mehr ergeben.
+    var done = rawKm;
     var left = Math.max(0, CONFIG.DISTANCE_KM - done);
-    var frac = done / CONFIG.DISTANCE_KM;
+    var frac = Math.min(1, done / CONFIG.DISTANCE_KM);
     // Werte werden als Text gesetzt, nie als HTML — sonst könnte eine manipulierte
     // Datenquelle fremden Code in die Seite schreiben.
     var set = function(id, v, unit, extra){
