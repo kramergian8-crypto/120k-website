@@ -1070,6 +1070,7 @@
           <div class="lh-tile">
             <div class="lh-k">Gelaufen</div>
             <div class="lh-v tnum" id="tDone">–<small>km</small></div>
+            <div class="mono" id="tDoneGps" style="font-size:11px; letter-spacing:.03em; color:var(--on-deep-2); margin-top:4px;"></div>
           </div>
           <div class="lh-tile">
             <div class="lh-k">Unterwegs</div>
@@ -1136,6 +1137,7 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="routeKm.js" defer></script>
 <script>
 (function(){
   "use strict";
@@ -1155,6 +1157,10 @@
     GOAL_SCHRITT: 200,
     DISTANCE_KM: 120,
     HOURS: 24,
+    // Kill-Switch: true = km wird (wo moeglich) entlang der bekannten Strecke
+    // projiziert (routeKm.js + route_full.json); false = wie bisher der
+    // rohe App-Wert d.km (GPS-Schrittsumme, kann driften).
+    ROUTE_KM_PRIMARY: true,
     // Geplante Route als [lat, lon]-Punkte fuer die Live-Karte. Kommt später
     // (echte GPX-Spur); bis dahin leer lassen — die Karte zeichnet dann
     // einfach keine geplante Route, nur die reale Spur.
@@ -1775,6 +1781,82 @@
 
   /* ---------------- LIVE-TRACKING ---------------- */
   var liveTimer = null, demoT0 = 0, tickTimer = null;
+  /* ---------- ROUTE-KM PROJEKTION (routeKm.js + route_full.json) ----------
+     Misst km entlang der bekannten Strecke statt der rohen App-Schrittsumme
+     (d.km), die per GPS driften kann. Kill-Switch: CONFIG.ROUTE_KM_PRIMARY. */
+  var routeKmTracker = null, routeFullData = null, routeKmLoading = false;
+  var routeKmSeeded = false, routeKmLastStand = null, routeKmFloor = 0;
+  // Lädt die volle Streckenauflösung + Bindet das Modul erst, wenn die
+  // Live-Seite wirklich geöffnet wird (nicht beim Laden der Startseite).
+  function ensureRouteKm(){
+    if(!CONFIG.ROUTE_KM_PRIMARY || routeFullData || routeKmLoading) return;
+    routeKmLoading = true;
+    fetch('route_full.json', { cache:'force-cache' })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        routeFullData = data;
+        if(window.RouteKm){ routeKmTracker = new window.RouteKm(routeFullData); }
+      })
+      .catch(function(){ /* kein Absturz — Fallback bleibt der App-km-Wert */ })
+      .then(function(){ routeKmLoading = false; });
+  }
+  // Setzt die Projektion fuer eine neue Live-Session zurueck (Seitenaufruf,
+  // Wechsel Demo/Vorschau/echter Feed) — verhindert, dass ein km-Stand aus
+  // einer anderen Sitzung/einem anderen Modus durchschlaegt.
+  function resetRouteKmSession(){
+    routeKmSeeded = false;
+    routeKmLastStand = null;
+    routeKmFloor = 0;
+    if(routeFullData && window.RouteKm){ routeKmTracker = new window.RouteKm(routeFullData); }
+  }
+  // Ermittelt die anzuzeigenden Kilometer: entlang der Strecke projiziert
+  // (source 'route'/'app', siehe routeKm.js), sonst der rohe App-Wert d.km
+  // als Fallback (Modul/Daten noch nicht geladen, oder keine Position).
+  // Nie ruecklaeufig innerhalb einer Live-Session (routeKmFloor).
+  function computeDisplayKm(d){
+    var appKm = (d.km != null && isFinite(d.km)) ? d.km : 0;
+    if(!CONFIG.ROUTE_KM_PRIMARY) return { km: appKm, source: 'app', appKm: appKm };
+    var hasPos = d.lat != null && d.lon != null && isFinite(d.lat) && isFinite(d.lon);
+    var km = appKm, source = 'app';
+    if(routeKmTracker && hasPos){
+      // Zeitbasis fuer die Fenstersuche: bevorzugt d.stand (echter Feed).
+      // Ohne d.stand (Demo, wo die Zeit stark gerafft ist — 24h in ~8min)
+      // die simulierte Renn-Uhr d.elapsed nehmen, NICHT die Wanduhr — sonst
+      // waere dt viel zu klein fuer die tatsaechlich gerafften km-Spruenge
+      // und die Fenstersuche wuerde staendig "abseits der Strecke" melden.
+      var standSec;
+      if(d.stand){
+        standSec = new Date(d.stand).getTime() / 1000;
+      } else {
+        var elapsedSek = parseElapsedSek(d.elapsed);
+        standSec = elapsedSek != null ? elapsedSek : (Date.now() / 1000);
+      }
+      var isNewPayload = !routeKmSeeded || d.stand == null || standSec !== routeKmLastStand;
+      var result = null;
+      if(!routeKmSeeded){
+        if(Array.isArray(d.spur) && d.spur.length >= 2){
+          result = routeKmTracker.seedFromSpur(d.spur);
+        } else {
+          routeKmTracker.seed(appKm);
+        }
+        routeKmSeeded = true;
+      }
+      if(isNewPayload){
+        result = routeKmTracker.update(d.lat, d.lon, standSec, appKm);
+        routeKmLastStand = standSec;
+      } else if(!result){
+        var st = routeKmTracker.getState();
+        result = { km: st.km, source: st.source };
+      }
+      if(result && result.km != null && (result.source === 'route' || result.source === 'app')){
+        km = result.km;
+        source = result.source;
+      }
+    }
+    km = Math.max(0, km);
+    if(km < routeKmFloor) km = routeKmFloor; else routeKmFloor = km;
+    return { km: km, source: source, appKm: appKm };
+  }
   // Live-Karte (Leaflet): wird erst beim ersten Anzeigen der Live-Seite
   // aufgebaut (nicht beim Laden der Seite), siehe ensureLiveMap().
   var liveMap = null, liveMarker = null, liveTrailLine = null, liveRouteLine = null, liveRouteCasing = null;
@@ -1937,7 +2019,7 @@
   }
   // Aktualisiert Position, Spur und Kamera auf der Live-Karte.
   // frische: 'live' | 'alt' | 'weg' — steuert, ob der Punkt grau wird.
-  function updateLiveMap(d, frische){
+  function updateLiveMap(d, frische, displayKm){
     var map = ensureLiveMap();
     if(!map) return;
     map.invalidateSize();
@@ -1963,7 +2045,8 @@
       var iconEl = liveMarker.getElement();
       if(iconEl) iconEl.classList.toggle('is-stale', frische !== 'live');
       var standTxt = d.stand ? new Date(d.stand).toLocaleTimeString('de-CH', { hour:'2-digit', minute:'2-digit' }) : '';
-      var kmTxt = d.km != null && isFinite(d.km) ? d.km.toFixed(1) + ' km' : 'Gian';
+      var dKm = displayKm != null && isFinite(displayKm) ? displayKm : d.km;
+      var kmTxt = dKm != null && isFinite(dKm) ? dKm.toFixed(1) + ' km' : 'Gian';
       liveMarker.setTooltipContent(kmTxt + (standTxt ? ' · ' + standTxt + ' Uhr' : ''));
     }
     doInitialLiveMapFit();
@@ -1976,7 +2059,9 @@
     letzteLiveDaten = d;
     letzteLiveEmpfangszeit = Date.now();
     var frische = frischePruefen(d.stand);
-    var done = Math.max(0, Math.min(CONFIG.DISTANCE_KM, d.km || 0));
+    var dispKm = computeDisplayKm(d);
+    var rawKm = Math.max(0, dispKm.km);
+    var done = Math.max(0, Math.min(CONFIG.DISTANCE_KM, rawKm));
     var left = Math.max(0, CONFIG.DISTANCE_KM - done);
     var frac = done / CONFIG.DISTANCE_KM;
     // Werte werden als Text gesetzt, nie als HTML — sonst könnte eine manipulierte
@@ -1991,6 +2076,16 @@
       }
     };
     set('tDone', done.toFixed(1), 'km');
+    var tDoneGps = document.getElementById('tDoneGps');
+    if(tDoneGps){
+      if(CONFIG.ROUTE_KM_PRIMARY){
+        var gpsTxt = 'GPS-Zählung App: ' + dispKm.appKm.toFixed(1) + ' km';
+        if(dispKm.source !== 'route') gpsTxt += ' · abseits der Strecke – App-Wert';
+        tDoneGps.textContent = gpsTxt;
+      } else {
+        tDoneGps.textContent = '';
+      }
+    }
     set('tLeft', left.toFixed(1), 'km');
     // Rennuhr: laeuft eigenstaendig weiter (Race-Clock ab Start bzw. seit d.stand
     // vor dem Start) statt bei jedem Poll den rohen d.elapsed reinzuschreiben.
@@ -2041,7 +2136,7 @@
     if(kmLbl) kmLbl.textContent = done.toFixed(1) + ' von ' + CONFIG.DISTANCE_KM + ' km';
     var raised = Number(d.raised != null ? d.raised : CONFIG.RAISED);
     document.getElementById('liveRaised').textContent = fmtChf(isFinite(raised) ? raised : 0);
-    updateLiveMap(d, frische);
+    updateLiveMap(d, frische, done);
     // Klassische, stilisierte Streckenansicht (Platzhalter-Pfad, wird später
     // durch den echten Streckenverlauf ersetzt) — Position weiterhin per
     // Kilometer-Anteil entlang des SVG-Pfads bestimmt, unabhängig von der Karte oben.
@@ -2049,8 +2144,14 @@
         halo = document.getElementById('trackDotHalo'), label = document.getElementById('trackLabel'),
         glow = document.getElementById('trackTrailGlow');
     if(path && dot){
+      // Positions-Anteil fuer den Punkt: entlang der echten Streckenlaenge
+      // (routeKm.js-Modul, 120.6 km), nicht der nominalen Renndistanz (120 km)
+      // — fällt auf frac (km/120) zurück, solange das Modul/die Route noch
+      // nicht geladen ist.
+      var routeLen = (routeKmTracker && routeKmTracker.routeLength) ? routeKmTracker.routeLength : CONFIG.DISTANCE_KM;
+      var dotFrac = routeLen > 0 ? Math.max(0, Math.min(1, rawKm / routeLen)) : frac;
       var pathLen = path.getTotalLength() || 2453;
-      var drawn = pathLen * frac;
+      var drawn = pathLen * dotFrac;
       path.style.strokeDasharray = pathLen; path.style.strokeDashoffset = (pathLen - drawn);
       if(glow){ glow.style.strokeDasharray = pathLen; glow.style.strokeDashoffset = (pathLen - drawn); }
       var p = path.getPointAtLength(drawn);
@@ -2150,6 +2251,8 @@
     if(liveTimer){ clearInterval(liveTimer); liveTimer = null; }
     if(tickTimer){ clearInterval(tickTimer); tickTimer = null; }
     if(weatherTimer){ clearInterval(weatherTimer); weatherTimer = null; }
+    ensureRouteKm();
+    resetRouteKmSession();
     loadWeather();
     if(CONFIG.WEATHER && CONFIG.WEATHER.on){
       weatherTimer = setInterval(loadWeather, CONFIG.WEATHER.refreshMs || 600000);
