@@ -382,6 +382,9 @@
   .brow .lbl{font-size:14px; color:var(--ink-2);}
   .brow .val{font-family:'Anton',sans-serif; font-size:23px; font-variant-numeric:tabular-nums;}
   .brow.hi .val{color:var(--red); font-size:30px;}
+  .donor-fields{margin-top:22px; padding-top:18px; border-top:1px solid var(--hair);}
+  .donor-fields .f{margin-bottom:14px;}
+  .donor-fields .formnote{margin-top:0; margin-bottom:14px;}
   .spend-callout{margin-top:18px; background:var(--red); color:#fff; padding:16px 18px; font-size:14px; line-height:1.55;}
   .spend-callout strong{display:block; margin-bottom:4px; font-weight:700;}
   .raffle{margin-top:26px; border:1px solid var(--hair); background:var(--paper-2); padding:20px;}
@@ -824,7 +827,7 @@
           </div>
           <div class="raffle">
             <h4>Und du kannst etwas gewinnen</h4>
-            <p>Wer spendet, nimmt teil: pro 10 Franken ein Los für drei Preise.</p>
+            <p>Wer spendet, nimmt teil: pro 10 Franken ein Los für drei Preise. Teilnahme nur mit vollständigem Namen und der E-Mail-Adresse, die du unten beim Spenden angibst.</p>
             <div class="prizes">
               <div class="prize"><div class="pn">Preis 1</div><div class="pt">Niederhornbahn<br>2 Tickets</div></div>
               <div class="prize"><div class="pn">Preis 2</div><div class="pt">Niesenbahn<br>1 Ticket</div></div>
@@ -852,6 +855,13 @@
             <div class="brow hi"><span class="lbl">Deine Spende</span><span class="val tnum" id="total">CHF 50</span></div>
           </div>
           <p class="formnote">Jeder Rappen zählt — auf 120 Kilometer gerechnet. Die Projektkosten decken Ausrüstung, Ernährung und Material.</p>
+          <div class="donor-fields" id="donorFields">
+            <p class="formnote">Für die Verlosung brauchen wir deinen vollständigen Namen und deine E-Mail — nur so können wir dich bei einem Gewinn erreichen und die Teilnahme deiner TWINT-Zahlung zuordnen. Beides ist Pflicht, um zu spenden. Wir verwenden die Angaben ausschliesslich für die Verlosung.</p>
+            <div class="f"><label for="dn">Vor- und Nachname</label><input id="dn" name="name" type="text" placeholder="Vor- und Nachname" /></div>
+            <div class="f"><label for="de">E-Mail</label><input id="de" name="email" type="email" placeholder="name@example.ch" /></div>
+            <div class="f"><label for="dp">Telefon <span style="text-transform:none; opacity:.7;">(optional)</span></label><input id="dp" name="phone" type="tel" placeholder="079 123 45 67" /></div>
+            <div class="formmsg" id="donateMsg" hidden></div>
+          </div>
           <a class="btn btn-red" id="donateBtn" href="#/#kontakt" style="margin-top:18px; width:100%;">Spenden</a>
           <p class="formnote" id="donateNote">Der Zahlungsweg wird gerade organisiert und kommt in den nächsten Tagen online.</p>
         </div>
@@ -1066,13 +1076,13 @@
           </div>
         </div>
         <div class="tiles">
-          <div class="tile"><div class="k">Tempo</div><div class="v tnum" id="tPace">–<small>min/km</small></div></div>
+          <div class="tile"><div class="k">Tempo aktuell</div><div class="v tnum" id="tPace">–<small>min/km</small></div></div>
           <div class="tile"><div class="k">Verbleibend</div><div class="v tnum" id="tLeft">–<small>km</small></div></div>
           <div class="tile"><div class="k">Restzeit (ca.)</div><div class="v tnum" id="tRemain">–</div></div>
           <div class="tile"><div class="k">Ankunft (ca.)</div><div class="v tnum" id="tETA">–</div></div>
           <div class="tile"><div class="k">Puls aktuell</div><div class="v tnum" id="tHr">–<small>bpm</small></div></div>
           <div class="tile"><div class="k">Puls Ø</div><div class="v tnum" id="tHrAvg">–<small>bpm</small></div></div>
-          <div class="tile"><div class="k">Höhenmeter</div><div class="v tnum" id="tElev">–<small>m</small></div></div>
+          <div class="tile"><div class="k">Höhenunterschied</div><div class="v tnum" id="tElev">–<small>m</small></div></div>
           <div class="tile"><div class="k">Kalorien</div><div class="v tnum" id="tKcal">–<small>kcal</small></div></div>
           <div class="tile"><div class="k">Temperatur</div><div class="v tnum" id="tTemp">–<small>°C</small></div></div>
           <div class="tile tile-sub"><div class="k">Akku Handy</div><div class="v tnum" id="tAkku">–<small>%</small></div></div>
@@ -1252,7 +1262,7 @@
   // Formatiert Minuten als "Xh Ym" fuer die Restzeit-Kachel.
   function fmtDauer(min){
     if(min == null || !isFinite(min) || min < 0) return '–';
-    var h = Math.floor(min/60), m = Math.round(min%60);
+    var t = Math.round(min), h = Math.floor(t/60), m = t%60;
     if(h <= 0) return m + ' min';
     return h + 'h ' + pad(m) + 'min';
   }
@@ -1438,6 +1448,85 @@
     });
   });
   calc();
+
+  /* ---------------- SPENDE: Angaben (für Verlosung) + Weiterleitung zu TWINT ---------------- */
+  (function(){
+    var dn = document.getElementById('dn'), de = document.getElementById('de'), dp = document.getElementById('dp');
+    var donateMsg = document.getElementById('donateMsg');
+    var donateBtn = document.getElementById('donateBtn');
+    if(!donateBtn) return;
+    function sayDonate(text, ok){
+      if(!donateMsg) return;
+      donateMsg.hidden = false; donateMsg.textContent = text;
+      donateMsg.style.color = ok ? '#2E8B57' : '#E2231A';
+    }
+    function hasFullName(v){
+      return v.trim().split(/\s+/).filter(Boolean).length >= 2;
+    }
+    function localISO(){
+      var d = new Date();
+      var tz = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tz).toISOString().slice(0, 19);
+    }
+    // Rückkehrende Spender: Name/E-Mail aus localStorage vorausfüllen
+    try{
+      var savedName = localStorage.getItem('120k_donor_name');
+      var savedMail = localStorage.getItem('120k_donor_email');
+      if(savedName && dn) dn.value = savedName;
+      if(savedMail && de) de.value = savedMail;
+    }catch(err){}
+
+    donateBtn.addEventListener('click', function(e){
+      if(!CONFIG.DONATE_URL) return; // Fallback: Link-Standardverhalten, solange Spenden noch nicht aufgeschaltet ist
+      e.preventDefault();
+      var name = (dn && dn.value.trim()) || '';
+      var mail = (de && de.value.trim()) || '';
+      var phone = (dp && dp.value.trim()) || '';
+      if(!name || !hasFullName(name)){
+        sayDonate('Bitte deinen vollständigen Namen (Vor- und Nachname) eingeben.', false);
+        if(dn) dn.focus();
+        return;
+      }
+      if(!mail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){
+        sayDonate('Bitte eine gültige E-Mail-Adresse eingeben — wir brauchen sie für die Verlosung.', false);
+        if(de) de.focus();
+        return;
+      }
+      if(donateMsg) donateMsg.hidden = true;
+      try{
+        localStorage.setItem('120k_donor_name', name);
+        localStorage.setItem('120k_donor_email', mail);
+      }catch(err){}
+
+      var amount = Math.max(0, Math.round((parseFloat(amtEl.value) || 0) * 100) / 100);
+      var lose = Math.floor(amount / 10);
+      if(CONFIG.FORM_ENDPOINT){
+        var payload = {
+          subject: 'Spende (Verlosung): CHF ' + amount + ' – ' + name,
+          name: name, email: mail, phone: phone,
+          amount: amount, lose: lose,
+          zeitpunkt: localISO(),
+          hinweis: 'Zuordnung: Betrag + Uhrzeit mit TWINT-Zahlung abgleichen'
+        };
+        if(CONFIG.FORM_ACCESS_KEY){
+          payload.access_key = CONFIG.FORM_ACCESS_KEY;
+          payload.from_name = name;
+          payload.replyto = mail;
+        }
+        try{
+          fetch(CONFIG.FORM_ENDPOINT, {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }catch(err){ /* Weiterleitung zu TWINT passiert trotzdem */ }
+      }
+      sayDonate('Weiter zu TWINT – bitte dort ' + fmtChf(amount) + ' eingeben und bestätigen.', true);
+      // Kurz warten, damit der Hinweis sichtbar ist und die Anmeldung sicher rausgeht.
+      setTimeout(function(){ location.href = CONFIG.DONATE_URL; }, 1200);
+    });
+  })();
 
   function updateGoalUI(raised, goal){
     CONFIG.RAISED = raised; CONFIG.GOAL = goal;
@@ -1700,13 +1789,23 @@
   // ein neuer Abruf kommt, korrigiert sich der Wert automatisch wieder auf
   // den echten Stand (kein Drift ueber laengere Zeit).
   function tickAnzeige(){
-    if(!letzteLiveDaten) return;
+    if(!letzteLiveDaten) return null;
     var basisSek = parseElapsedSek(letzteLiveDaten.elapsed);
-    if(basisSek == null) return;
-    var vergangen = Math.floor((Date.now() - letzteLiveEmpfangszeit) / 1000);
-    var sek = basisSek + Math.max(0, vergangen);
+    if(basisSek == null) return null;
+    var sek;
+    if(Date.now() >= startAt){
+      // Offizielle Rennuhr ab CONFIG.START — läuft jede Sekunde weiter,
+      // unabhängig von Polls oder Funklöchern.
+      sek = Math.floor((Date.now() - startAt) / 1000);
+    } else {
+      // Vor dem Start (Vorschau/Demo): den gemeldeten Elapsed-Wert seit dem
+      // Zeitpunkt des Datensatzes (d.stand) weiterzählen, nicht seit Empfang.
+      var standT = letzteLiveDaten.stand ? new Date(letzteLiveDaten.stand).getTime() : NaN;
+      sek = basisSek + (isFinite(standT) ? Math.max(0, Math.floor((Date.now() - standT) / 1000)) : 0);
+    }
     var el = document.getElementById('tTime');
     if(el) el.textContent = pad(Math.floor(sek/3600)) + ':' + pad(Math.floor(sek%3600/60)) + ':' + pad(sek%60);
+    return sek;
   }
   // Bewertet, wie alt die gelieferten Daten sind. Ohne Zeitstempel (Demo) gilt "live".
   // Gibt zurueck: 'live' | 'alt' | 'weg'
@@ -1892,12 +1991,24 @@
     };
     set('tDone', done.toFixed(1), 'km');
     set('tLeft', left.toFixed(1), 'km');
-    set('tTime', d.elapsed || '–');
+    // Rennuhr: laeuft eigenstaendig weiter (Race-Clock ab Start bzw. seit d.stand
+    // vor dem Start) statt bei jedem Poll den rohen d.elapsed reinzuschreiben.
+    var sek = tickAnzeige();
     // Tempo und Puls sind Momentwerte — sobald die Daten alt sind, waeren sie gelogen.
     var aktuell = (frische === 'live');
-    set('tPace', aktuell && d.pace ? d.pace : '–', aktuell && d.pace ? 'min/km' : '');
-    set('tHr', aktuell && d.hr != null ? Math.round(d.hr) : '–', aktuell && d.hr != null ? 'bpm' : '');
-    set('tHrAvg', d.hrAvg != null ? Math.round(d.hrAvg) : '–', d.hrAvg != null ? 'bpm' : '');
+    // "Tempo aktuell" (d.paceAktuell) ist der Live-Wert; null heisst "steht".
+    // d.pace (Gesamtschnitt inkl. Pausen) bleibt als Zusatzangabe sichtbar,
+    // auch wenn die Live-Daten veraltet sind — das ist kein Momentwert.
+    var paceAktuellVal = aktuell ? d.paceAktuell : null;
+    var paceHints = [];
+    if(aktuell && !paceAktuellVal) paceHints.push('steht');
+    if(d.pace) paceHints.push('Ø ' + d.pace + ' inkl. Pausen');
+    set('tPace', paceAktuellVal || '–', paceAktuellVal ? 'min/km' : '', paceHints.join(' · '));
+    var hrOk = aktuell && d.hr != null && d.hr > 0;
+    set('tHr', hrOk ? Math.round(d.hr) : '–', hrOk ? 'bpm' : '');
+    var hrAvgOk = d.hrAvg != null && d.hrAvg > 0;
+    set('tHrAvg', hrAvgOk ? Math.round(d.hrAvg) : '–', hrAvgOk ? 'bpm' : '');
+    // Höhenunterschied = max−min GPS-Höhe, keine Aufstiegsmeter (siehe Label oben).
     set('tElev', d.elev != null ? Math.round(d.elev) : '–', 'm');
     set('tKcal', d.kcal != null ? Math.round(d.kcal) : '–', d.kcal != null ? 'kcal' : '');
     var wTemp = weatherNow ? weatherNow.temp : d.temp;
@@ -1912,7 +2023,9 @@
     // Restzeit & Ankunft: aus dem bisherigen Durchschnittstempo hochgerechnet.
     // Nur anzeigen, wenn die Daten frisch sind und genug Strecke gelaufen ist,
     // sonst waere die Hochrechnung Zufall statt Schaetzung.
-    var elapsedSek = parseElapsedSek(d.elapsed);
+    // Dieselben Sekunden wie die "Unterwegs"-Uhr (tickAnzeige), damit Restzeit/ETA
+    // nicht von einer anderen Elapsed-Quelle abweichen.
+    var elapsedSek = sek != null ? sek : parseElapsedSek(d.elapsed);
     var remainMin = null, eta = null;
     if(aktuell && done > 0.3 && elapsedSek && left > 0){
       var sekProKm = elapsedSek / done;
@@ -2009,10 +2122,14 @@
       demoSpurPts.push([pos[0], pos[1], Math.floor(Date.now() / 1000)]);
       if(demoSpurPts.length > 400) demoSpurPts.shift();
     }
+    // Simuliert kurze Pausen: "Tempo aktuell" faellt dabei auf null (→ "steht"),
+    // der Gesamtschnitt (pace) laeuft unbeeinflusst weiter, wie beim echten Feed.
+    var steht = Math.sin(t/55) < -0.75;
     return {
       km: km,
       elapsed: pad(Math.floor(secs/3600)) + ':' + pad(Math.floor(secs%3600/60)) + ':' + pad(secs%60),
       pace: Math.floor(paceMin) + ':' + pad(Math.round((paceMin%1)*60)),
+      paceAktuell: steht ? null : (Math.floor(paceMin) + ':' + pad(Math.round((paceMin%1)*60))),
       hr: 138 + Math.sin(t/4)*12,
       hrAvg: 141,
       elev: km / CONFIG.DISTANCE_KM * 2200,
@@ -2105,7 +2222,7 @@
         donateBtn.target = '_blank';
         donateBtn.rel = 'noopener noreferrer';
         donateBtn.textContent = 'Jetzt ' + document.getElementById('total').textContent + ' spenden';
-        if(donateNote) donateNote.textContent = 'Du wirst zu TWINT weitergeleitet — dort bitte den Betrag noch einmal eingeben und bestätigen.';
+        if(donateNote) donateNote.textContent = 'Zwei Schritte: 1) Name und E-Mail oben eintragen. 2) Weiterleitung zu TWINT — dort bitte den Betrag noch einmal eingeben und bestätigen.';
       }
     }
   }
