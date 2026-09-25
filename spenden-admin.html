@@ -72,11 +72,17 @@
       zeigeStand(d);
     }).catch(function(e){ zeigeMsg('Fehler beim Laden: ' + e, false); });
   }
+  var wirdGesendet = false;
+  function setzeButtons(disabled) {
+    document.querySelectorAll('button').forEach(function(b){ b.disabled = disabled; });
+  }
   function hinzufuegen() {
+    if (wirdGesendet) return;
     var token = getToken();
     var amount = document.getElementById('amount').value;
     if (!token) { zeigeMsg('Bitte Passwort eingeben.', false); return; }
     if (!amount || Number(amount) <= 0) { zeigeMsg('Bitte gültigen Betrag eingeben.', false); return; }
+    wirdGesendet = true; setzeButtons(true); zeigeMsg('Wird gespeichert…', true);
     fetch(API + '/admin/add?token=' + encodeURIComponent(token) + '&amount=' + encodeURIComponent(amount))
       .then(function(r){ return r.json(); })
       .then(function(d){
@@ -84,13 +90,16 @@
         zeigeStand(d);
         document.getElementById('amount').value = '';
         zeigeMsg('Gespeichert.', true);
-      }).catch(function(e){ zeigeMsg('Fehler: ' + e, false); });
+      }).catch(function(e){ zeigeMsg('Fehler: ' + e, false); })
+      .finally(function(){ wirdGesendet = false; setzeButtons(false); });
   }
   function korrigieren() {
+    if (wirdGesendet) return;
     var token = getToken();
     var total = document.getElementById('setTotal').value;
     if (!token) { zeigeMsg('Bitte Passwort eingeben.', false); return; }
     if (total === '' || Number(total) < 0) { zeigeMsg('Bitte gültigen Betrag eingeben.', false); return; }
+    wirdGesendet = true; setzeButtons(true); zeigeMsg('Wird gespeichert…', true);
     fetch(API + '/admin/set?token=' + encodeURIComponent(token) + '&total=' + encodeURIComponent(total))
       .then(function(r){ return r.json(); })
       .then(function(d){
@@ -98,7 +107,8 @@
         zeigeStand(d);
         document.getElementById('setTotal').value = '';
         zeigeMsg('Gespeichert.', true);
-      }).catch(function(e){ zeigeMsg('Fehler: ' + e, false); });
+      }).catch(function(e){ zeigeMsg('Fehler: ' + e, false); })
+      .finally(function(){ wirdGesendet = false; setzeButtons(false); });
   }
   ladeStand();
 </script>
