@@ -493,7 +493,17 @@
     font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em; color:#6E7267;}
 
   /* ---------------- LIVE PAGE (RÜCKBLICK) ---------------- */
-  .live-wrap{padding:92px 0 70px; min-height:100svh; background:var(--deep); color:var(--on-deep);}
+  .kern-route{margin-top:18px; font-family:'Anton',sans-serif; text-transform:uppercase; font-weight:400;
+    font-size:clamp(22px,4vw,42px); line-height:1.15; color:#fff;}
+  .kern-route b{font-weight:400; white-space:nowrap;}
+  .kern-route span{color:var(--red); padding:0 .1em;}
+  .warum116{margin-top:44px; padding:26px 24px; border-left:6px solid var(--red); background:rgba(244,243,238,.05);
+    border-radius:0 14px 14px 0; max-width:900px;}
+  .warum116 h3{font-family:'Anton',sans-serif; text-transform:uppercase; font-weight:400; color:#fff;
+    font-size:clamp(28px,4.4vw,46px); line-height:1.05; margin:0 0 14px;}
+  .warum116 .big{font-size:clamp(19px,2.2vw,24px); line-height:1.45; font-weight:600; color:#fff; margin:0;}
+  .warum116 .big strong{color:var(--red); font-weight:700;}
+  .warum116 p + p{margin-top:14px; font-size:17px; line-height:1.6; color:var(--on-deep-2);}
   .tiles{display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:rgba(244,243,238,.16);
     border:1px solid rgba(244,243,238,.16); margin-top:26px;}
   @media (min-width:760px){ .tiles{grid-template-columns:repeat(4,1fr);} }
@@ -591,7 +601,7 @@
       <a href="#/" data-r="/">Start</a>
       <a href="#/#wer" data-r="/">Projekt</a>
       <a href="#/videos" data-r="/videos" data-flag="videosPage">Videos</a>
-      <a href="#/live" data-r="/live" data-flag="livePage" data-live-link="short">Rückblick</a>
+      <a href="#/#rueckblick" data-live-link="short">Rückblick</a>
       <a href="#/#spenden" data-r="/">Spenden</a>
       <a href="#/#sponsoren" data-r="/">Sponsoren</a>
     </nav>
@@ -607,7 +617,7 @@
   <a href="#/">Start</a>
   <a href="#/#projekt">Projekt</a>
   <a href="#/videos">Videos</a>
-  <a href="#/live" data-live-link="long">Rückblick</a>
+  <a href="#/#rueckblick" data-live-link="long">Rückblick</a>
   <a href="#/#spenden">Spenden</a>
   <a href="#/#crew">Crew</a>
   <a href="#/#sponsoren">Sponsoren</a>
@@ -630,7 +640,7 @@
       </div>
       <div class="hero-cta">
         <a class="btn btn-red" href="#/#spenden">Jetzt spenden</a>
-        <a class="btn btn-ghost" id="heroLive" href="#/live" data-live-link="long">Rückblick & Strecke</a>
+        <a class="btn btn-ghost" id="heroLive" href="#/#rueckblick" data-live-link="long">Rückblick & Strecke</a>
       </div>
     </div>
   </section>
@@ -703,12 +713,53 @@
     </div>
   </section>
 
-  <section class="band deep" id="liveTeaser">
-    <div class="wrap" style="text-align:center;">
+  <section class="band deep" id="rueckblick">
+    <div class="wrap">
       <div class="eyebrow" style="color:var(--red); margin-bottom:14px;">Rückblick</div>
-      <h2 class="display sec-h" style="color:#fff;" id="ltH">Der ganze Weg, im Detail.</h2>
-      <p class="lead" style="color:var(--on-deep-2); margin:14px auto 0; max-width:52ch;" id="ltP">116 km, 2043 Höhenmeter, 30 h 26 min — die komplette Strecke und alle Daten zum Nachschauen.</p>
-      <a class="btn btn-red" href="#/live" style="margin-top:24px;" data-live-link="long">Zur Strecke</a>
+      <h2 class="display sec-h" style="color:#fff;">Geschafft: 116&nbsp;km in 30&nbsp;h&nbsp;26&nbsp;min</h2>
+      <div class="kern-route"><b>Rathausplatz Thun</b> <span>→</span> <b>Thunersee</b> <span>→</span> <b>Brienzersee</b> <span>→</span> <b>Rathausplatz Thun</b></div>
+
+      <div class="livemap" id="liveMapWrap">
+        <div id="liveMapEl" role="img" aria-label="Karte: geplante Route und tatsächlich gelaufene Strecke von Gian"></div>
+      </div>
+
+      <div class="live-hero">
+        <div class="lh-tile">
+          <div class="lh-k">Distanz</div>
+          <div class="lh-v tnum">116<small>km</small></div>
+          <div class="mono" style="font-size:11px; letter-spacing:.03em; color:var(--on-deep-2); margin-top:4px;">Daten: 116.1 km</div>
+        </div>
+        <div class="lh-tile">
+          <div class="lh-k">Zeit</div>
+          <div class="lh-v tnum">30:26<small>h:min</small></div>
+        </div>
+      </div>
+
+      <div class="tiles">
+        <div class="tile">
+          <div class="k">Start</div>
+          <div class="v tnum" style="font-size:19px;">26.09., 10:00</div>
+          <div class="v-note">Rathausplatz Thun</div>
+        </div>
+        <div class="tile">
+          <div class="k">Ziel</div>
+          <div class="v tnum" style="font-size:19px;">27.09., 16:25</div>
+          <div class="v-note">Rathausplatz Thun</div>
+        </div>
+        <div class="tile"><div class="k">Ø Tempo inkl. Pausen</div><div class="v tnum">15:44<small>min/km</small></div></div>
+        <div class="tile"><div class="k">Höhenmeter</div><div class="v tnum">2043<small>m</small></div><div class="v-note">Suunto</div></div>
+        <div class="tile"><div class="k">Ø Puls</div><div class="v tnum">121<small>bpm</small></div></div>
+        <div class="tile"><div class="k">Max. Puls</div><div class="v tnum">194<small>bpm</small></div></div>
+        <div class="tile"><div class="k">Kalorien</div><div class="v tnum">~16'300<small>kcal</small></div><div class="v-note">geschätzt</div></div>
+        <div class="tile"><div class="k">Messpunkte</div><div class="v tnum">36'917</div><div class="v-note">alle 3 Sekunden gesendet</div></div>
+      </div>
+
+
+      <div class="warum116">
+        <h3>Warum 116 statt 120&nbsp;km?</h3>
+        <p class="big">Die Runde ist komplett: <strong>vom Rathausplatz Thun einmal um Thuner- und Brienzersee und zurück zum Rathausplatz.</strong></p>
+        <p>Um auf genau 120&nbsp;km zu kommen, war am Schluss noch eine zusätzliche 4-km-Schlaufe in Thun geplant. Die habe ich bewusst weggelassen: Nach über 30 Stunden und vielen Schmerzen ging es nur noch darum, anzukommen und keine Verletzung zu riskieren.</p>
+      </div>
     </div>
   </section>
 
@@ -768,7 +819,7 @@
         <div class="reveal">
           <p class="lead" style="max-width:52ch;">Start um 10:00 Uhr am <strong>Rathausplatz Thun</strong>. Über Interlaken zum Brienzersee, einmal um diesen herum, zurück über Interlaken, dann über Spiez wieder nach Thun.</p>
           <p class="lead" style="max-width:52ch; margin-top:14px; font-size:16px;">Die geplante Zusatzschlaufe von 4 km in Thun, um exakt auf 120 km zu kommen, liess Gian bewusst weg — nach über 30 Stunden zählte nur noch, sicher und ohne Verletzung anzukommen.</p>
-          <a class="btn btn-line" href="#/live" style="margin-top:20px;" data-live-link="long">Rückblick & Strecke</a>
+          <a class="btn btn-line" href="#/#rueckblick" style="margin-top:20px;" data-live-link="long">Rückblick & Strecke</a>
           <div class="waypoints mobile-hide">
             <div class="wp reveal"><div class="wp-km">START</div><div class="wp-p">Rathausplatz Thun</div></div>
             <div class="wp reveal"><div class="wp-km">KM 24</div><div class="wp-p">Interlaken</div></div>
@@ -993,58 +1044,6 @@
 </main>
 
 <!-- ============ LIVE ============ -->
-<main class="page" id="page-live">
-  <div class="live-wrap">
-    <div class="wrap">
-      <div class="eyebrow">Rückblick</div>
-      <h2 class="display sec-h" style="color:#fff; margin-top:12px;">Geschafft: 116&nbsp;km in 30&nbsp;h&nbsp;26&nbsp;min</h2>
-      <p class="lead" style="margin:14px 0 0; color:var(--on-deep-2); max-width:52ch;">Rathausplatz Thun – einmal um Thuner- und Brienzersee – zurück zum Rathausplatz.</p>
-
-      <div class="livemap" id="liveMapWrap">
-        <div id="liveMapEl" role="img" aria-label="Karte: geplante Route und tatsächlich gelaufene Strecke von Gian"></div>
-      </div>
-
-      <div class="live-hero">
-        <div class="lh-tile">
-          <div class="lh-k">Distanz</div>
-          <div class="lh-v tnum">116<small>km</small></div>
-          <div class="mono" style="font-size:11px; letter-spacing:.03em; color:var(--on-deep-2); margin-top:4px;">Daten: 116.1 km</div>
-        </div>
-        <div class="lh-tile">
-          <div class="lh-k">Zeit</div>
-          <div class="lh-v tnum">30:26<small>h:min</small></div>
-        </div>
-      </div>
-
-      <div class="tiles">
-        <div class="tile">
-          <div class="k">Start</div>
-          <div class="v tnum" style="font-size:19px;">26.09., 10:00</div>
-          <div class="v-note">Rathausplatz Thun</div>
-        </div>
-        <div class="tile">
-          <div class="k">Ziel</div>
-          <div class="v tnum" style="font-size:19px;">27.09., 16:25</div>
-          <div class="v-note">Rathausplatz Thun</div>
-        </div>
-        <div class="tile"><div class="k">Ø Tempo inkl. Pausen</div><div class="v tnum">15:44<small>min/km</small></div></div>
-        <div class="tile"><div class="k">Höhenmeter</div><div class="v tnum">2043<small>m</small></div><div class="v-note">Suunto</div></div>
-        <div class="tile"><div class="k">Ø Puls</div><div class="v tnum">121<small>bpm</small></div></div>
-        <div class="tile"><div class="k">Max. Puls</div><div class="v tnum">194<small>bpm</small></div></div>
-        <div class="tile"><div class="k">Kalorien</div><div class="v tnum">~16'300<small>kcal</small></div><div class="v-note">geschätzt</div></div>
-        <div class="tile"><div class="k">Messpunkte</div><div class="v tnum">36'917</div><div class="v-note">alle 3 Sekunden gesendet</div></div>
-      </div>
-
-      <div class="demo-tip" style="font-family:inherit; font-size:16px; line-height:1.6; max-width:62ch; color:var(--on-deep);">
-        Geplant waren 120 km mit einer zusätzlichen 4-km-Schlaufe in Thun. Die habe ich am Schluss bewusst weggelassen: Nach über 30 Stunden ging es nur noch darum, anzukommen und keine Verletzung zu riskieren.
-      </div>
-
-      <div style="margin-top:34px;">
-        <a class="btn btn-red" href="#/#spenden">Die Spendenaktion läuft weiter bis 31.10.2026</a>
-      </div>
-    </div>
-  </div>
-</main>
 
 <footer>
   <div class="wrap">
@@ -1056,7 +1055,7 @@
       <div class="foot-links">
         <a href="#/#wer">Projekt</a>
         <a href="#/videos">Videos</a>
-        <a href="#/live" data-live-link="short">Rückblick</a>
+        <a href="#/#rueckblick" data-live-link="short">Rückblick</a>
         <a href="#/#spenden">Spenden</a>
         <a href="#/#sponsoren">Sponsoren</a>
         <a href="#/#kontakt">Kontakt</a>
@@ -1159,7 +1158,6 @@
       trailer:     false, // Trailer-Video-Kachel auf /videos
       doku:        false, // Doku-Video-Kachel auf /videos
       videosPage:  true,  // ganze /videos Seite überhaupt
-      livePage:    true,  // /live überhaupt zeigen
       sponsorRows: true,  // Sponsor-Marquees (aus, wenn noch niemand da ist)
       sponsorForm: true,
       raffle:      true
@@ -1189,7 +1187,7 @@
   }
 
   /* ---------------- ROUTER ---------------- */
-  var pages = { '/':'page-home', '/videos':'page-videos', '/live':'page-live' };
+  var pages = { '/':'page-home', '/videos':'page-videos' };
   function currentRoute(){
     var h = location.hash.replace(/^#/, '');
     if(!h || h === '/') return { route:'/', anchor:'', query:'' };
@@ -1199,6 +1197,8 @@
     var parts = h.split('#');
     var route = parts[0] || '/';
     if(parts.length > 1) anchor = parts[1];
+    // Alte Links auf #/live fuehren zum Rueckblick auf der Startseite.
+    if(route === '/live'){ route = '/'; anchor = 'rueckblick'; }
     if(!pages[route]) route = '/';
     return { route:route, anchor:anchor, query:q };
   }
@@ -1218,9 +1218,7 @@
     } else {
       window.scrollTo({ top:0, behavior:'auto' });
     }
-    // Der Lauf ist vorbei: #/live ist jetzt der Rückblick, ohne Gate und
-    // ohne Demo-/Vorschau-Modi — die Seite ist immer direkt erreichbar.
-    if(c.route === '/live') ensureRecapMap();
+    if(c.route === '/') beobachteRecapMap();
     kickReveals();
   }
   window.addEventListener('hashchange', render);
@@ -1570,7 +1568,20 @@
      tatsächlich gelaufene Strecke (track_gelaufen.json, lazy beim Öffnen
      der Seite geladen) auf der Leaflet-Karte, mit Start/Ziel-Marker am
      Rathausplatz Thun. */
-  var recapMapDone = false;
+  var recapMapDone = false, recapFit = null;
+  // Karte erst aufbauen, wenn sie in die Naehe des Bildschirms kommt: dann
+  // hat der Container seine echte Groesse (sonst falscher Zoom) und die
+  // Kacheln werden nur fuer Leute geladen, die bis hierhin scrollen.
+  function beobachteRecapMap(){
+    var el = document.getElementById('liveMapEl');
+    if(!el || recapMapDone) return;
+    if(!('IntersectionObserver' in window)){ ensureRecapMap(); return; }
+    var mio = new IntersectionObserver(function(entries){
+      if(entries.some(function(e){ return e.isIntersecting; })){ mio.disconnect(); ensureRecapMap(); }
+    }, { rootMargin:'400px 0px' });
+    mio.observe(el);
+  }
+  window.addEventListener('resize', function(){ if(recapFit) recapFit(); });
   function ensureRecapMap(){
     if(recapMapDone) return;
     if(typeof L === 'undefined') return;
@@ -1604,6 +1615,7 @@
       map.invalidateSize();
       map.fitBounds(fitPts, { padding:[28,28] });
     };
+    recapFit = doFit;
     setTimeout(doFit, 60);
     // Tatsächlich gelaufene Strecke: eigene, statische Datei — erst jetzt
     // geladen (nicht beim Laden der ganzen Website), im roten Akzent obendrauf.
@@ -1629,7 +1641,6 @@
     });
     // If /videos page is off but user tries to navigate there, redirect to home
     if(!CONFIG.SHOW.videosPage && location.hash.indexOf('/videos') >= 0) location.hash = '#/';
-    if(!CONFIG.SHOW.livePage && location.hash.indexOf('/live') >= 0) location.hash = '#/';
     // Sponsor rows
     var rowsEl = document.querySelector('#sponsoren .rows');
     if(rowsEl) rowsEl.style.display = CONFIG.SHOW.sponsorRows ? '' : 'none';
