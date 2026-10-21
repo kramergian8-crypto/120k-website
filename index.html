@@ -1079,9 +1079,9 @@
   var CONFIG = {
     START: '2026-09-26T10:00:00+02:00',
     BANNER_UNTIL: '2026-09-26T10:00:00+02:00',
-    GOAL: 1000,
+    GOAL: 10000,
     RAISED: 0,
-    // Ziel wächst automatisch: Startziel 1000, wird bei Erreichen immer um
+    // Ziel wächst automatisch: Ziel fix 10000; falls erreicht, waechst es um
     // diesen Schritt erhöht, ohne Ende. Der echte Wert kommt live vom
     // Spenden-Worker (DONATION_FEED) — GOAL/RAISED hier sind nur die
     // Anzeige, bevor die erste Antwort da ist.
@@ -1381,15 +1381,20 @@
   /* ---------------- SPENDENSTAND (manuell gepflegt, siehe DONATION_FEED) ---------------- */
   function setupSpenden(){
     if(!CONFIG.DONATION_FEED) return;
+    function zeige(total){
+      if(typeof total === 'number' && isFinite(total)) updateGoalUI(total, CONFIG.GOAL);
+    }
     function pull(){
       fetch(CONFIG.DONATION_FEED + '/status', { cache: 'no-store' })
-        .then(function(r){ return r.json(); })
-        .then(function(d){
-          if(d && typeof d.total === 'number'){
-            updateGoalUI(d.total, d.ziel || (d.total + CONFIG.GOAL_SCHRITT));
-          }
-        })
-        .catch(function(){ /* still shows the last known stand */ });
+        .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function(d){ if(d && typeof d.total === 'number') zeige(d.total); else throw new Error('leer'); })
+        .catch(function(){
+          // Worker nicht erreichbar: Stand direkt aus dem oeffentlichen Daten-Repo lesen.
+          fetch('https://raw.githubusercontent.com/kramergian8-crypto/120k-live/main/donations.json?t=' + Date.now(), { cache: 'no-store' })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ zeige(d && d.total); })
+            .catch(function(){});
+        });
     }
     pull();
     setInterval(pull, CONFIG.DONATION_POLL_MS);
